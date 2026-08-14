@@ -7,70 +7,129 @@ function robloxAvatarPlugin(): Plugin {
   return {
     name: 'roblox-avatar-middleware',
     configureServer(server) {
-      server.middlewares.use('/api/roblox-avatar', async (req, res) => {
-        try {
-          const reqUrl = new URL(req.url || '', 'http://localhost');
-          const username = reqUrl.searchParams.get('username');
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url || '';
+        if (url.startsWith('/api/roblox/avatar') || url.startsWith('/api/roblox-avatar')) {
+          try {
+            const reqUrl = new URL(url, 'http://localhost');
+            const username = reqUrl.searchParams.get('username');
 
-          if (!username) {
-            res.statusCode = 400;
-            res.setHeader('Content-Type', 'application/json');
-            return res.end(JSON.stringify({ error: 'Username parameter is required' }));
-          }
+            if (!username) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Username parameter is required' }));
+            }
 
-          // 1. Get user ID from Roblox Users API
-          const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usernames: [username.trim()], excludeBannedUsers: false }),
-          });
+            // 1. Get user ID from Roblox Users API
+            let userId: number | null = null;
+            let foundName = username.trim();
+            let foundDisplay = username.trim();
+            let hasVerifiedBadge = false;
 
-          if (!userRes.ok) {
-            res.statusCode = userRes.status;
-            res.setHeader('Content-Type', 'application/json');
-            return res.end(JSON.stringify({ error: 'Failed to contact Roblox users API' }));
-          }
+            try {
+              const userRes = await fetch('https://users.roblox.com/v1/usernames/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usernames: [username.trim()], excludeBannedUsers: false }),
+              });
 
-          const userData = await userRes.json();
-          if (!userData.data || userData.data.length === 0) {
-            res.statusCode = 404;
-            res.setHeader('Content-Type', 'application/json');
-            return res.end(JSON.stringify({ error: 'Roblox user not found' }));
-          }
+              if (userRes.ok) {
+                const userData = await userRes.json();
+                if (userData.data && userData.data.length > 0) {
+                  userId = userData.data[0].id;
+                  foundName = userData.data[0].name;
+                  foundDisplay = userData.data[0].displayName || userData.data[0].name;
+                  hasVerifiedBadge = !!userData.data[0].hasVerifiedBadge;
+                }
+              }
+            } catch {
+              // Ignore
+            }
 
-          const userId = userData.data[0].id;
+            if (!userId) {
+              const searchRes = await fetch(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username.trim())}&limit=5`).catch(() => null);
+              if (searchRes && searchRes.ok) {
+                const sData = await searchRes.json();
+                if (sData.data && sData.data.length > 0) {
+                  userId = sData.data[0].id;
+                  foundName = sData.data[0].name;
+                  foundDisplay = sData.data[0].displayName || sData.data[0].name;
+                  hasVerifiedBadge = !!sData.data[0].hasVerifiedBadge;
+                }
+              }
+            }
 
-          // 2. Fetch thumbnail from Roblox Thumbnails API
-          const thumbRes = await fetch(
-            `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`
-          );
+            if (!userId) {
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                username,
+                displayName: username,
+                id: null,
+                hasVerifiedBadge: false,
+                avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png`,
+              }));
+            }
 
-          if (!thumbRes.ok) {
-            res.statusCode = thumbRes.status;
-            res.setHeader('Content-Type', 'application/json');
-            return res.end(JSON.stringify({ error: 'Failed to contact Roblox thumbnails API' }));
-          }
+            // 2. Fetch thumbnail from Roblox Thumbnails API
+            let avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
+            try {
+              const thumbRes = await fetch(
+                `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`
+              );
+              if (thumbRes.ok) {
+                const thumbData = await thumbRes.json();
+                if (thumbData.data && thumbData.data.length > 0 && thumbData.data[0].imageUrl) {
+                  avatarUrl = thumbData.data[0].imageUrl;
+                }
+              }
+            } catch {
+              // Keep direct headshot url
+            }
 
-          const thumbData = await thumbRes.json();
-          if (thumbData.data && thumbData.data.length > 0 && thumbData.data[0].imageUrl) {
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({
               userId,
-              username: userData.data[0].name,
-              displayName: userData.data[0].displayName,
-              imageUrl: thumbData.data[0].imageUrl,
+              id: userId,
+              username: foundName,
+              displayName: foundDisplay,
+              hasVerifiedBadge,
+              imageUrl: avatarUrl,
+              avatarUrl,
             }));
+          } catch (error) {
+            console.error('Roblox avatar proxy error:', error);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: 'Internal server error' }));
           }
-
-          res.statusCode = 404;
-          res.setHeader('Content-Type', 'application/json');
-          return res.end(JSON.stringify({ error: 'Thumbnail not found' }));
-        } catch (error) {
-          console.error('Roblox avatar proxy error:', error);
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          return res.end(JSON.stringify({ error: 'Internal server error' }));
         }
+
+        if (url.startsWith('/api/roblox/search')) {
+          try {
+            const reqUrl = new URL(url, 'http://localhost');
+            const query = reqUrl.searchParams.get('query') || '';
+            const searchRes = await fetch(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(query)}&limit=10`).catch(() => null);
+            if (searchRes && searchRes.ok) {
+              const sData = await searchRes.json();
+              const users = (sData.data || []).map((u: any) => ({
+                id: u.id,
+                username: u.name,
+                displayName: u.displayName || u.name,
+                hasVerifiedBadge: !!u.hasVerifiedBadge,
+                avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=${u.id}&width=150&height=150&format=png`,
+              }));
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ users }));
+            }
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ users: [] }));
+          } catch {
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ users: [] }));
+          }
+        }
+
+        next();
       });
     },
   };
