@@ -226,55 +226,86 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
               </div>
             </div>
           ) : step === 'select_user' ? (
-            /* STEP 1: Search by username & Friends List (1:1 Match IMG_0384.png) */
+            /* STEP 1: Search by any username & Friends List */
             <div className="space-y-4">
               {/* Search by username input box */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={getTranslation(lang, 'searchByUsername')}
-                  className="w-full bg-transparent border border-[#CED2D6] dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-[#191919] dark:text-white placeholder:text-[#8D9094] dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#191919] dark:focus:border-white transition-colors"
-                />
-                {searchQuery ? (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9094] hover:text-[#191919] dark:hover:text-white p-0.5"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                ) : isSearching ? (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9094]">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  </div>
-                ) : null}
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        e.preventDefault();
+                        handleSelectUser({ username: searchQuery.trim() });
+                      }
+                    }}
+                    placeholder={getTranslation(lang, 'searchByUsername')}
+                    autoFocus
+                    className="w-full bg-transparent border border-[#CED2D6] dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-[#191919] dark:text-white placeholder:text-[#8D9094] dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#191919] dark:focus:border-white transition-colors pr-9"
+                  />
+                  {searchQuery ? (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9094] hover:text-[#191919] dark:hover:text-white p-0.5 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  ) : isSearching ? (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9094]">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
-              {/* Friends & Search Results Section */}
+              {/* User Selection List */}
               <div className="space-y-2">
-                <div className="text-sm font-bold text-[#191919] dark:text-white">
-                  {getTranslation(lang, 'myFriends')} ({filteredFriends.length})
-                </div>
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                  {/* DIRECT SELECTION CARD for the typed username */}
+                  {searchQuery.trim().length > 0 && (
+                    <div
+                      onClick={() => handleSelectUser({ username: searchQuery.trim() })}
+                      className="p-3 bg-[#F2F4F5] dark:bg-zinc-800/90 hover:bg-[#E8EBEE] dark:hover:bg-zinc-700/90 border-2 border-[#191919]/20 dark:border-white/20 rounded-2xl cursor-pointer transition-all flex items-center justify-between group shadow-2xs"
+                    >
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-white dark:bg-zinc-700 shrink-0 flex items-center justify-center border border-[#E3E5E8] dark:border-zinc-600">
+                          <RobloxAvatar username={searchQuery.trim()} />
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <div className="text-xs font-semibold text-[#656668] dark:text-zinc-400">
+                            {lang === 'de' ? 'Direkt an Benutzer senden:' : 'Send directly to:'}
+                          </div>
+                          <div className="text-sm font-black text-[#191919] dark:text-white truncate">
+                            @{searchQuery.trim()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-[#191919] dark:bg-white text-white dark:text-[#191919] text-xs font-bold px-3 py-1.5 rounded-lg group-hover:scale-105 transition-transform shrink-0 ml-2">
+                        {lang === 'de' ? 'Auswählen ↵' : 'Select ↵'}
+                      </div>
+                    </div>
+                  )}
 
-                <div className="max-h-72 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                   {/* Live Roblox Search Results if query exists */}
                   {searchQuery.trim().length > 0 && robloxSearchResults.length > 0 && (
-                    <div className="space-y-1 mb-2 pb-2 border-b border-[#E3E5E8] dark:border-zinc-800">
+                    <div className="space-y-1 pt-1 pb-1">
                       <div className="text-[11px] font-bold text-[#8D9094] uppercase tracking-wider px-1">
-                        Roblox ({robloxSearchResults.length})
+                        {getTranslation(lang, 'robloxResults')} ({robloxSearchResults.length})
                       </div>
                       {robloxSearchResults.map((user) => (
                         <div
                           key={user.id}
                           onClick={() => handleSelectRobloxSearchResult(user)}
-                          className="flex items-center space-x-2.5 p-1.5 rounded-xl hover:bg-[#F2F4F5] dark:hover:bg-zinc-800/80 cursor-pointer transition-colors"
+                          className="flex items-center space-x-2.5 p-2 rounded-xl hover:bg-[#F2F4F5] dark:hover:bg-zinc-800/80 cursor-pointer transition-colors"
                         >
-                          <div className="w-7 h-7 rounded-full overflow-hidden bg-[#E3E5E8] dark:bg-zinc-700 shrink-0 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-[#E3E5E8] dark:bg-zinc-700 shrink-0 flex items-center justify-center">
                             <RobloxAvatar username={user.username} customUrl={user.avatarUrl || undefined} />
                           </div>
                           <div className="flex items-center space-x-1 text-sm font-semibold text-[#191919] dark:text-white truncate">
                             <span className="truncate">{user.displayName || user.username}</span>
+                            <span className="text-xs text-[#8D9094] truncate">(@{user.username})</span>
                             {user.hasVerifiedBadge && <VerifiedBadge className="w-3.5 h-3.5 shrink-0" />}
                           </div>
                         </div>
@@ -282,38 +313,30 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                     </div>
                   )}
 
-                  {/* Fallback direct selection if custom username typed */}
-                  {searchQuery.trim().length > 0 && filteredFriends.length === 0 && robloxSearchResults.length === 0 && !isSearching && (
-                    <div 
-                      onClick={() => handleSelectUser({ username: searchQuery.trim() })}
-                      className="p-3 bg-[#F2F4F5] dark:bg-zinc-800/70 rounded-xl cursor-pointer hover:bg-[#E8EBEE] dark:hover:bg-zinc-800 text-center space-y-1"
-                    >
-                      <div className="text-xs text-[#8D9094]">Send to typed user:</div>
-                      <div className="text-sm font-bold text-[#191919] dark:text-white">
-                        &quot;{searchQuery.trim()}&quot;
-                      </div>
+                  {/* Friends / Recent List */}
+                  <div className="pt-1">
+                    <div className="text-xs font-bold text-[#656668] dark:text-zinc-400 mb-1 px-1">
+                      {getTranslation(lang, 'myFriends')} ({filteredFriends.length})
                     </div>
-                  )}
-
-                  {/* Filtered Friends List (1:1 Match IMG_0384.png rows) */}
-                  {filteredFriends.map((friend) => (
-                    <div
-                      key={friend.id}
-                      onClick={() => handleSelectUser(friend)}
-                      className="flex items-center space-x-2.5 px-2 py-1.5 rounded-xl hover:bg-[#F2F4F5] dark:hover:bg-zinc-800/80 cursor-pointer transition-colors group"
-                    >
-                      <div className="w-7 h-7 rounded-full overflow-hidden bg-[#E3E5E8] dark:bg-zinc-700 shrink-0 flex items-center justify-center">
-                        <RobloxAvatar username={friend.username} customUrl={friend.avatarUrl} />
+                    {filteredFriends.map((friend) => (
+                      <div
+                        key={friend.id}
+                        onClick={() => handleSelectUser(friend)}
+                        className="flex items-center space-x-2.5 px-2.5 py-2 rounded-xl hover:bg-[#F2F4F5] dark:hover:bg-zinc-800/80 cursor-pointer transition-colors group"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-[#E3E5E8] dark:bg-zinc-700 shrink-0 flex items-center justify-center">
+                          <RobloxAvatar username={friend.username} customUrl={friend.avatarUrl} />
+                        </div>
+                        <div className="flex items-center space-x-1 min-w-0">
+                          <span className="text-sm font-semibold text-[#191919] dark:text-white group-hover:text-black dark:group-hover:text-white truncate">
+                            {friend.username}
+                          </span>
+                          {friend.hasBadge && <RobloxPlusBadge className="w-3.5 h-3.5 text-[#191919] dark:text-white shrink-0 ml-0.5" />}
+                          {friend.badgeType === 'verified' && <VerifiedBadge className="w-3.5 h-3.5 shrink-0 ml-0.5" />}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-1 min-w-0">
-                        <span className="text-sm font-semibold text-[#191919] dark:text-white group-hover:text-black dark:group-hover:text-white truncate">
-                          {friend.username}
-                        </span>
-                        {friend.hasBadge && <RobloxPlusBadge className="w-3.5 h-3.5 text-[#191919] dark:text-white shrink-0 ml-0.5" />}
-                        {friend.badgeType === 'verified' && <VerifiedBadge className="w-3.5 h-3.5 shrink-0 ml-0.5" />}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

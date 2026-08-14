@@ -38,6 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [limitedItemDays, setLimitedItemDays] = useState<string>((userSettings.limitedItemDays ?? 18).toString());
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
+  const [fetchSuccess, setFetchSuccess] = useState(false);
 
   // Add friend state
   const [newFriendUsername, setNewFriendUsername] = useState('');
@@ -77,14 +78,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   const handleFetchRobloxAvatar = async () => {
-    if (!username.trim()) return;
+    const trimmed = username.trim();
+    if (!trimmed) return;
     setIsFetchingPreview(true);
+    setFetchSuccess(false);
     try {
-      const info = await fetchRobloxUserInfo(username.trim());
+      const info = await fetchRobloxUserInfo(trimmed);
       setCustomAvatarUrl(info.avatarUrl);
+      const isVerified = info.hasVerifiedBadge ? true : hasVerifiedBadge;
       if (info.hasVerifiedBadge) {
         setHasVerifiedBadge(true);
       }
+
+      const numRobux = parseInt(robuxCount, 10);
+      const parsedDays = parseInt(limitedItemDays, 10);
+
+      // Auto-save immediately to app state & storage
+      onUpdateSettings({
+        username: trimmed,
+        displayName: info.displayName || trimmed,
+        robuxCount: isNaN(numRobux) ? 0 : numRobux,
+        hasVerifiedBadge: isVerified,
+        isRobloxPlus,
+        customAvatarUrl: info.avatarUrl,
+        theme,
+        language,
+        limitedItemDays: isNaN(parsedDays) ? 18 : parsedDays,
+      });
+
+      setFetchSuccess(true);
+      setTimeout(() => setFetchSuccess(false), 2500);
     } catch (err) {
       console.warn('Failed to fetch avatar preview:', err);
     } finally {
@@ -369,15 +392,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={handleFetchRobloxAvatar}
                     disabled={isFetchingPreview || !username.trim()}
-                    className="px-3 py-2 bg-[#E3E5E8] dark:bg-zinc-800 hover:bg-[#BDC1C6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white rounded-xl text-xs font-bold flex items-center space-x-1 transition-colors shrink-0 disabled:opacity-50"
-                    title="Fetch profile picture from Roblox for this username"
+                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shrink-0 disabled:opacity-50 cursor-pointer ${
+                      fetchSuccess
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-[#E3E5E8] dark:bg-zinc-800 hover:bg-[#BDC1C6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white'
+                    }`}
+                    title="Fetch profile picture from Roblox and save automatically"
                   >
                     {isFetchingPreview ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00A2FF]" />
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00A2FF]" />
+                        <span className="hidden sm:inline">Saving...</span>
+                      </>
+                    ) : fetchSuccess ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Saved!</span>
+                      </>
                     ) : (
-                      <Search className="w-3.5 h-3.5" />
+                      <>
+                        <Search className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Fetch Avatar</span>
+                      </>
                     )}
-                    <span className="hidden sm:inline">Fetch Avatar</span>
                   </button>
                 </div>
               </div>
