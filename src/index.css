@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+html {
+  scroll-behavior: smooth;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: #111214;
+}
+
+html.dark body {
+  background-color: #111214;
+  color: #ffffff;
+}
+
+/* Custom scrollbars for clean Roblox dual slide bars */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #BDC1C6 transparent;
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: #393B3D transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #BDC1C6;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9AA0A6;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #393B3D;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #5F6368;
+}
+
+/* 3D Rotating Animation for Limited Items (Matches Video 1:1) */
+@keyframes spinY3D {
+  0% {
+    transform: perspective(900px) rotateY(0deg) rotateX(4deg);
+  }
+  50% {
+    transform: perspective(900px) rotateY(180deg) rotateX(-4deg);
+  }
+  100% {
+    transform: perspective(900px) rotateY(360deg) rotateX(4deg);
+  }
+}
+
+.animate-crown-3d {
+  animation: spinY3D 10s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}

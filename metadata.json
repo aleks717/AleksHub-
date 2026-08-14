@@ -1,0 +1,8 @@
+{
+  "name": "Remix Roblox Web Clone",
+  "description": "Ein exakter Roblox Website-Nachbau mit Robux-Paketen, FAQ, Freundesliste, Robux-Senden-Funktion und anpassbaren Einstellungen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
