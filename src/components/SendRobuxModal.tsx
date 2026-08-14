@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { X, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Calendar, Users, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Calendar, Users, Info, Sparkles, ArrowRight, RefreshCw } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { RobloxFriend, UserSettings } from '../types';
 import { RobuxIcon, RobloxPlusBadge, VerifiedBadge } from './RobloxIcons';
 import { RobloxAvatar } from './RobloxAvatar';
@@ -14,7 +15,7 @@ interface SendRobuxModalProps {
   onSendRobux: (recipientUsername: string, amount: number) => boolean;
 }
 
-type SendStep = 'select_user' | 'enter_amount' | 'confirm_send';
+type SendStep = 'select_user' | 'enter_amount' | 'confirm_send' | 'sending';
 
 export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   isOpen,
@@ -34,12 +35,22 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     hasBadge?: boolean;
   } | null>(null);
   const [sendAmount, setSendAmount] = useState<string>('0');
-  const [sendSuccess, setSendSuccess] = useState<string | null>(null);
+  const [sendSuccessData, setSendSuccessData] = useState<{
+    recipient: string;
+    amount: number;
+    avatarUrl?: string;
+    transactionId: string;
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Live Roblox API search states
   const [robloxSearchResults, setRobloxSearchResults] = useState<RobloxUserSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+
+  // Animation transfer states
+  const [transferProgress, setTransferProgress] = useState(0);
+  const [animatedRobuxCount, setAnimatedRobuxCount] = useState(0);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -60,6 +71,15 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Clean up animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   // Filter friends list
@@ -70,7 +90,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   const handleSelectUser = (friend: { username: string; avatarUrl?: string; hasVerifiedBadge?: boolean; hasBadge?: boolean }) => {
     setSelectedFriend(friend);
     setStep('enter_amount');
-    setSendSuccess(null);
+    setSendSuccessData(null);
     setErrorMessage(null);
   };
 
@@ -81,7 +101,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
       hasVerifiedBadge: res.hasVerifiedBadge,
     });
     setStep('enter_amount');
-    setSendSuccess(null);
+    setSendSuccessData(null);
     setErrorMessage(null);
   };
 
@@ -109,6 +129,20 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     setStep('confirm_send');
   };
 
+  const triggerConfetti = () => {
+    try {
+      confetti({
+        particleCount: 70,
+        spread: 65,
+        origin: { y: 0.6 },
+        colors: ['#00A2FF', '#10B981', '#F59E0B', '#6366F1', '#FFFFFF'],
+        ticks: 180,
+      });
+    } catch {
+      // Confetti fallback
+    }
+  };
+
   const handleExecuteSend = () => {
     const amount = parseInt(sendAmount, 10);
     const recipient = selectedFriend ? selectedFriend.username : searchQuery.trim();
@@ -118,17 +152,54 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
       return;
     }
 
-    const success = onSendRobux(recipient, amount);
-    if (success) {
-      setSendSuccess(lang === 'de' 
-        ? `${amount.toLocaleString('de-DE')} Robux erfolgreich an ${recipient} gesendet!` 
-        : `Successfully sent ${amount.toLocaleString('en-US')} Robux to ${recipient}!`);
-      setErrorMessage(null);
-    } else {
+    if (amount > userSettings.robuxCount) {
       setErrorMessage(lang === 'de'
         ? `Nicht genug Robux! Dein aktuelles Guthaben beträgt ${userSettings.robuxCount.toLocaleString('de-DE')} Robux.`
         : `Insufficient Robux! Your current balance is ${userSettings.robuxCount.toLocaleString('en-US')} Robux.`);
+      return;
     }
+
+    // Begin animated sending phase (NO SOUND, ONLY 1 ROTATION OF CIRCLE WITH CHECKMARK)
+    setStep('sending');
+    setTransferProgress(0);
+    setAnimatedRobuxCount(0);
+    setErrorMessage(null);
+
+    const startTime = Date.now();
+    const duration = 1200; // 1.2s single clean rotation
+
+    const animate = () => {
+      const now = Date.now();
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+
+      setTransferProgress(Math.round(progress * 100));
+      setAnimatedRobuxCount(Math.round(progress * amount));
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        // Animation finished!
+        const success = onSendRobux(recipient, amount);
+        if (success) {
+          const randomId = 'RBX-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+          setSendSuccessData({
+            recipient,
+            amount,
+            avatarUrl: selectedFriend?.avatarUrl,
+            transactionId: randomId,
+          });
+          triggerConfetti();
+        } else {
+          setErrorMessage(lang === 'de'
+            ? `Nicht genug Robux! Dein aktuelles Guthaben beträgt ${userSettings.robuxCount.toLocaleString('de-DE')} Robux.`
+            : `Insufficient Robux! Your current balance is ${userSettings.robuxCount.toLocaleString('en-US')} Robux.`);
+          setStep('confirm_send');
+        }
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
   };
 
   const handleBack = () => {
@@ -145,8 +216,10 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   const resetView = () => {
     setStep('select_user');
     setSelectedFriend(null);
-    setSendSuccess(null);
+    setSendSuccessData(null);
     setErrorMessage(null);
+    setTransferProgress(0);
+    setAnimatedRobuxCount(0);
   };
 
   const handleClose = () => {
@@ -157,76 +230,208 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   };
 
   const parsedAmount = parseInt(sendAmount, 10) || 0;
+  const recipientName = selectedFriend?.username || searchQuery.trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-2xs p-4 animate-in fade-in duration-150 text-[#191919] dark:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200 text-[#191919] dark:text-white">
       <div 
-        className="bg-white dark:bg-[#1A1D20] text-[#191919] dark:text-white rounded-[24px] w-full max-w-[420px] shadow-2xl overflow-hidden border border-[#E3E5E8] dark:border-zinc-800"
+        className="bg-white dark:bg-[#1A1D20] text-[#191919] dark:text-white rounded-[28px] w-full max-w-[440px] shadow-2xl overflow-hidden border border-[#E3E5E8] dark:border-zinc-800 transition-all"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Top Header (1:1 Match IMG_0384.png, IMG_0385.png, IMG_0387.png) */}
-        <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+        {/* Modal Top Header */}
+        <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-[#F2F4F5] dark:border-zinc-800/80">
           <div className="flex items-center space-x-2">
-            {step !== 'select_user' && !sendSuccess && (
+            {step !== 'select_user' && step !== 'sending' && !sendSuccessData && (
               <button
                 onClick={handleBack}
-                className="p-1 hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full mr-0.5 text-[#191919] dark:text-white cursor-pointer"
+                className="p-1.5 hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full mr-0.5 text-[#191919] dark:text-white cursor-pointer transition-colors"
                 title="Back"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
-            <RobloxPlusBadge className="w-5 h-5 text-[#191919] dark:text-white" />
-            <h2 className="text-base md:text-lg font-bold text-[#191919] dark:text-white tracking-tight">
+            <div className="p-1 bg-[#F2F4F5] dark:bg-zinc-800 rounded-lg">
+              <RobloxPlusBadge className="w-4 h-4 text-[#191919] dark:text-white" />
+            </div>
+            <h2 className="text-base font-bold text-[#191919] dark:text-white tracking-tight">
               {getTranslation(lang, 'sendRobuxTitle')}
             </h2>
           </div>
 
           <div className="flex items-center space-x-3">
             {/* User Balance display in top right: ⬡ 1,594 */}
-            <div className="flex items-center space-x-1 text-sm font-bold text-[#191919] dark:text-white">
-              <RobuxIcon className="w-3.5 h-3.5 text-[#191919] dark:text-white" />
+            <div className="flex items-center space-x-1.5 bg-[#F2F4F5] dark:bg-zinc-800/80 px-2.5 py-1 rounded-full text-xs font-bold text-[#191919] dark:text-white">
+              <RobuxIcon className="w-3.5 h-3.5 text-[#191919] dark:text-white shrink-0" />
               <span>{userSettings.robuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
             </div>
 
+            {/* Always visible Close / X Button */}
             <button
               onClick={handleClose}
-              className="p-1 text-[#191919] dark:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
+              className="p-1.5 text-[#656668] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
+              title={lang === 'de' ? 'Schließen' : 'Close'}
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Modal Body */}
-        <div className="px-6 pb-6 pt-1">
-          {sendSuccess ? (
-            /* Sent Success Screen */
-            <div className="py-6 text-center space-y-4 animate-in fade-in duration-200">
-              <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-sm">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+        <div className="px-6 pb-6 pt-4">
+          {/* ========================================================================= */}
+          {/* STAGE: CIRCLE WITH CHECKMARK (1 ROTATION ONLY, NO SOUND)                  */}
+          {/* ========================================================================= */}
+          {step === 'sending' ? (
+            <div className="py-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+              {/* Central Verified Circle with 1 Rotation + Checkmark Draw */}
+              <div className="relative mx-auto w-28 h-28 flex items-center justify-center">
+                {/* The Rotating Circle SVG that completes 1 turn & draws the checkmark */}
+                <svg 
+                  className="w-24 h-24 transform -rotate-90 animate-spin-once" 
+                  viewBox="0 0 100 100"
+                >
+                  {/* Track Background */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="44"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="5"
+                    className="text-[#E3E5E8] dark:text-zinc-800"
+                  />
+                  {/* Active Drawing Circle */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="44"
+                    fill="none"
+                    stroke={transferProgress > 70 ? '#10B981' : '#00A2FF'}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    className="animate-draw-circle transition-colors duration-300"
+                  />
+                </svg>
+
+                {/* The Checkmark (Häkchen) that pops and draws inside after rotation */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg 
+                    className="w-12 h-12 text-emerald-500 animate-draw-check" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="3.5" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-[#191919] dark:text-white">Robux Sent!</h3>
-              <p className="text-sm text-[#656668] dark:text-zinc-300 max-w-xs mx-auto font-medium">
-                {sendSuccess}
-              </p>
-              <div className="pt-2 flex justify-center space-x-3">
+
+              {/* Status Text: Just simple Send / Senden (no verified text) */}
+              <div className="space-y-1.5 animate-in fade-in duration-300">
+                <h3 className="text-xl font-black text-[#191919] dark:text-white tracking-tight">
+                  {lang === 'de' ? 'Robux senden' : 'Send Robux'}
+                </h3>
+                <div className="flex items-center justify-center space-x-1.5 text-sm font-bold text-[#656668] dark:text-zinc-400">
+                  <RobuxIcon className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span className="text-[#191919] dark:text-white font-extrabold">{parsedAmount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
+                  <span>{lang === 'de' ? 'an' : 'to'}</span>
+                  <span className="text-[#191919] dark:text-white font-extrabold">@{recipientName}</span>
+                </div>
+              </div>
+
+              {/* Close Button during sending if user wants to dismiss */}
+              <button
+                onClick={handleClose}
+                type="button"
+                className="w-full py-2 text-xs font-bold text-[#8D9094] hover:text-[#191919] dark:hover:text-white transition-colors cursor-pointer"
+              >
+                {lang === 'de' ? 'Schließen' : 'Close'}
+              </button>
+            </div>
+          ) : sendSuccessData ? (
+            /* ========================================================================= */
+            /* STAGE: GRAND SUCCESS CELEBRATION CARD                                    */
+            /* ========================================================================= */
+            <div className="py-3 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+              {/* Success Check Badge */}
+              <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping opacity-75" />
+                <div className="relative w-16 h-16 bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <CheckCircle2 className="w-10 h-10 text-white" />
+                </div>
+              </div>
+
+              {/* Success Heading */}
+              <div className="space-y-1">
+                <div className="inline-flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{lang === 'de' ? 'Erfolgreich Gesendet!' : 'Transfer Successful!'}</span>
+                </div>
+                <h3 className="text-2xl font-black text-[#191919] dark:text-white tracking-tight">
+                  {lang === 'de' ? 'Robux Überwiesen' : 'Robux Delivered'}
+                </h3>
+              </div>
+
+              {/* Large Amount Showcase Badge */}
+              <div className="p-4 bg-gradient-to-br from-[#F4FDF7] to-[#E6F9EE] dark:from-emerald-950/30 dark:to-emerald-900/10 border-2 border-emerald-500/30 rounded-2xl space-y-1 shadow-sm">
+                <div className="flex items-center justify-center space-x-2 text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                  <RobuxIcon className="w-7 h-7 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="tabular-nums">
+                    +{sendSuccessData.amount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}
+                  </span>
+                </div>
+                <div className="text-xs font-semibold text-[#656668] dark:text-zinc-300">
+                  {lang === 'de' ? 'Gesendet an' : 'Sent to'}{' '}
+                  <span className="font-bold text-[#191919] dark:text-white">@{sendSuccessData.recipient}</span>
+                </div>
+              </div>
+
+              {/* Transaction Receipt Details */}
+              <div className="bg-[#F2F4F5] dark:bg-[#23272A] rounded-2xl p-3.5 space-y-2 text-left text-xs text-[#656668] dark:text-zinc-300 border border-[#E3E5E8] dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[#E3E5E8] dark:border-zinc-700">
+                  <span>{lang === 'de' ? 'Transaktions-ID' : 'Transaction ID'}</span>
+                  <span className="font-mono font-bold text-[#191919] dark:text-white">{sendSuccessData.transactionId}</span>
+                </div>
+                <div className="flex items-center justify-between pb-1.5 border-b border-[#E3E5E8] dark:border-zinc-700">
+                  <span>{lang === 'de' ? 'Neues Guthaben' : 'Remaining Balance'}</span>
+                  <div className="flex items-center space-x-1 font-bold text-[#191919] dark:text-white">
+                    <RobuxIcon className="w-3 h-3" />
+                    <span>{userSettings.robuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{lang === 'de' ? 'Status' : 'Status'}</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>{lang === 'de' ? 'Abgeschlossen' : 'Completed'}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons with explicit Schließen / Close Button */}
+              <div className="pt-2 flex items-center space-x-3">
                 <button
                   onClick={resetView}
-                  className="bg-[#E8EBEE] dark:bg-zinc-800 hover:bg-[#DCE0E6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+                  className="flex-1 bg-[#E8EBEE] dark:bg-zinc-800 hover:bg-[#DCE0E6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white font-bold py-3 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  Send to someone else
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{lang === 'de' ? 'Noch mehr senden' : 'Send More'}</span>
                 </button>
                 <button
                   onClick={handleClose}
-                  className="bg-[#191919] dark:bg-white hover:bg-black dark:hover:bg-zinc-100 text-white dark:text-[#191919] font-bold px-5 py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+                  className="flex-1 bg-[#191919] dark:bg-white hover:bg-black dark:hover:bg-zinc-100 text-white dark:text-[#191919] font-bold py-3 rounded-xl text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  Done
+                  <span>{lang === 'de' ? 'Schließen' : 'Close'}</span>
                 </button>
               </div>
             </div>
           ) : step === 'select_user' ? (
-            /* STEP 1: Search by any username & Friends List */
+            /* ========================================================================= */
+            /* STAGE 1: SEARCH USER / FRIENDS LIST                                      */
+            /* ========================================================================= */
             <div className="space-y-4">
               {/* Search by username input box */}
               <div className="space-y-1.5">
@@ -304,7 +509,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                             <RobloxAvatar username={user.username} customUrl={user.avatarUrl || undefined} />
                           </div>
                           <div className="flex items-center space-x-1 text-sm font-semibold text-[#191919] dark:text-white truncate">
-                            <span className="truncate">{user.displayName || user.username}</span>
+                            <span>{user.displayName}</span>
                             <span className="text-xs text-[#8D9094] truncate">(@{user.username})</span>
                             {user.hasVerifiedBadge && <VerifiedBadge className="w-3.5 h-3.5 shrink-0" />}
                           </div>
@@ -339,51 +544,85 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Close Button on Step 1 */}
+              <button
+                onClick={handleClose}
+                type="button"
+                className="w-full py-2.5 text-xs font-bold text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white bg-[#F2F4F5] dark:bg-zinc-800 hover:bg-[#E8EBEE] dark:hover:bg-zinc-700 rounded-xl transition-colors cursor-pointer"
+              >
+                {lang === 'de' ? 'Schließen' : 'Close'}
+              </button>
             </div>
           ) : step === 'enter_amount' ? (
-            /* STEP 2: Send Robux Amount Screen (1:1 Match IMG_0385.png) */
-            <div className="space-y-6 pt-2 pb-1 text-center animate-in fade-in duration-150">
-              {/* Centered Avatar (1:1 Match IMG_0385.png) */}
-              <div className="flex flex-col items-center justify-center space-y-1.5 pt-2">
-                <div className="w-20 h-20 rounded-full overflow-hidden bg-[#E3E5E8] dark:bg-zinc-800 border-2 border-[#E3E5E8] dark:border-zinc-700 shadow-sm flex items-center justify-center shrink-0">
+            /* ========================================================================= */
+            /* STAGE 2: ENTER ROBUX AMOUNT                                              */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              {/* Selected recipient header */}
+              <div className="flex items-center space-x-3 p-3 bg-[#F2F4F5] dark:bg-[#23272A] rounded-2xl">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-white dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-[#E3E5E8] dark:border-zinc-700">
                   <RobloxAvatar username={selectedFriend?.username || 'Roblox'} customUrl={selectedFriend?.avatarUrl} />
                 </div>
-                <div className="flex items-center justify-center space-x-1.5 text-sm font-bold text-[#191919] dark:text-white">
-                  <span>{selectedFriend?.username}</span>
-                  {selectedFriend?.hasVerifiedBadge && <VerifiedBadge className="w-3.5 h-3.5" />}
-                  {selectedFriend?.hasBadge && <RobloxPlusBadge className="w-3.5 h-3.5 text-[#191919] dark:text-white" />}
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="text-xs text-[#8D9094]">{getTranslation(lang, 'recipient')}</div>
+                  <div className="text-sm font-bold text-[#191919] dark:text-white truncate flex items-center space-x-1">
+                    <span>{selectedFriend?.username}</span>
+                    {selectedFriend?.hasVerifiedBadge && <VerifiedBadge className="w-3.5 h-3.5 shrink-0" />}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setStep('select_user')}
+                  className="text-xs font-bold text-[#3871F5] dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  {getTranslation(lang, 'edit')}
+                </button>
+              </div>
+
+              {/* Amount of Robux Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#656668] dark:text-zinc-300 block text-left">
+                  {getTranslation(lang, 'amountOfRobux')}
+                </label>
+                <div className="relative flex items-center">
+                  <div className="absolute left-3.5 flex items-center pointer-events-none">
+                    <RobuxIcon className="w-5 h-5 text-[#191919] dark:text-white" />
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={userSettings.robuxCount}
+                    value={sendAmount === '0' ? '' : sendAmount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSendAmount(val === '' ? '0' : val);
+                      setErrorMessage(null);
+                    }}
+                    placeholder="0"
+                    autoFocus
+                    className="w-full bg-transparent border border-[#CED2D6] dark:border-zinc-700 rounded-xl pl-11 pr-4 py-3 text-lg font-bold text-[#191919] dark:text-white placeholder:text-[#8D9094] dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#191919] dark:focus:border-white transition-colors"
+                  />
                 </div>
               </div>
 
-              {/* Centered Large Robux Amount Display (1:1 Match IMG_0385.png: ⬡ 0) */}
-              <div className="flex items-center justify-center space-x-2 py-1">
-                <RobuxIcon className="w-9 h-9 text-[#191919] dark:text-white shrink-0" />
-                <input
-                  type="number"
-                  min="0"
-                  value={sendAmount}
-                  onChange={(e) => setSendAmount(e.target.value)}
-                  className="w-36 text-center font-black text-4xl md:text-5xl text-[#191919] dark:text-white bg-transparent focus:outline-none transition-colors"
-                  placeholder="0"
-                  autoFocus
-                />
-              </div>
-
-              {/* 4 Preset Buttons: [ ⬡ 25 ] [ ⬡ 50 ] [ ⬡ 100 ] [ ⬡ 200 ] (1:1 Match IMG_0385.png) */}
-              <div className="grid grid-cols-4 gap-2 px-1">
-                {['25', '50', '100', '200'].map((amt) => (
+              {/* Quick Amount presets */}
+              <div className="grid grid-cols-4 gap-2">
+                {['100', '500', '1000', `${userSettings.robuxCount}`].map((amt) => (
                   <button
                     key={amt}
                     type="button"
-                    onClick={() => setSendAmount(amt)}
-                    className={`py-2.5 px-1.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center space-x-1 transition-all shadow-2xs cursor-pointer ${
+                    onClick={() => {
+                      setSendAmount(amt);
+                      setErrorMessage(null);
+                    }}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold transition-colors flex items-center justify-center space-x-1 cursor-pointer ${
                       sendAmount === amt
                         ? 'bg-[#191919] dark:bg-white text-white dark:text-[#191919]'
                         : 'bg-[#E8EBEE] dark:bg-zinc-800 hover:bg-[#DCE0E6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white'
                     }`}
                   >
                     <RobuxIcon className={`w-3.5 h-3.5 shrink-0 ${sendAmount === amt ? 'text-white dark:text-[#191919]' : 'text-[#191919] dark:text-white'}`} />
-                    <span>{amt}</span>
+                    <span>{amt === `${userSettings.robuxCount}` ? 'Max' : amt}</span>
                   </button>
                 ))}
               </div>
@@ -396,7 +635,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </div>
               )}
 
-              {/* Next Button & Subtitle (1:1 Match IMG_0385.png: Periwinkle "Next" button + subtitle) */}
+              {/* Next Button & Subtitle */}
               <div className="pt-2 space-y-2.5">
                 <button
                   onClick={handleProceedToConfirm}
@@ -404,15 +643,26 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 >
                   {getTranslation(lang, 'next')}
                 </button>
-                <p className="text-xs text-[#656668] dark:text-zinc-400 font-normal tracking-tight">
-                  {getTranslation(lang, 'robloxAreSent')}
-                </p>
+                <div className="space-y-1 text-center">
+                  <button
+                    onClick={handleClose}
+                    type="button"
+                    className="text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:hover:text-white hover:underline cursor-pointer"
+                  >
+                    {lang === 'de' ? 'Schließen' : 'Close'}
+                  </button>
+                  <p className="text-xs text-[#656668] dark:text-zinc-400 font-normal tracking-tight">
+                    {getTranslation(lang, 'robloxAreSent')}
+                  </p>
+                </div>
               </div>
             </div>
           ) : (
-            /* STEP 3: Final Review & Confirmation Dialog (EXACT 1:1 Match IMG_0387.png) */
+            /* ========================================================================= */
+            /* STAGE 3: CONFIRM & EXECUTE SEND                                          */
+            /* ========================================================================= */
             <div className="space-y-4 pt-1 pb-1 animate-in fade-in duration-150">
-              {/* Recipient Profile Card (IMG_0387.png) */}
+              {/* Recipient Profile Card */}
               <div className="bg-[#F2F4F5] dark:bg-[#23272A] rounded-2xl p-4 flex flex-col items-center text-center space-y-2">
                 <div className="w-16 h-16 rounded-full overflow-hidden bg-white dark:bg-zinc-800 border-2 border-white/80 dark:border-zinc-700 shadow-xs flex items-center justify-center shrink-0">
                   <RobloxAvatar username={selectedFriend?.username || 'Roblox'} customUrl={selectedFriend?.avatarUrl} />
@@ -446,7 +696,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </div>
               </div>
 
-              {/* Robux Amount Card (IMG_0387.png) */}
+              {/* Robux Amount Card */}
               <div className="bg-[#F2F4F5] dark:bg-[#23272A] rounded-2xl py-4 px-4 text-center space-y-1">
                 <div className="flex items-center justify-center space-x-1.5 text-2xl md:text-3xl font-extrabold text-[#191919] dark:text-white">
                   <RobuxIcon className="w-6 h-6 text-[#191919] dark:text-white shrink-0" />
@@ -465,13 +715,14 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </div>
               )}
 
-              {/* Action Buttons: [ Send ] and [ Edit ] (1:1 Match IMG_0387.png) */}
+              {/* Action Buttons: [ Send ] and [ Edit ] */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   onClick={handleExecuteSend}
-                  className="w-full bg-[#3871F5] hover:bg-[#2563EB] active:scale-[0.99] text-white font-bold py-3 rounded-xl shadow-xs transition-all text-sm cursor-pointer"
+                  className="w-full bg-[#3871F5] hover:bg-[#2563EB] active:scale-[0.98] text-white font-bold py-3 rounded-xl shadow-md transition-all text-sm cursor-pointer flex items-center justify-center space-x-1.5 group"
                 >
-                  {getTranslation(lang, 'send')}
+                  <span>{getTranslation(lang, 'send')}</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </button>
                 <button
                   onClick={handleBack}
@@ -481,7 +732,16 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </button>
               </div>
 
-              {/* Disclaimer Text (1:1 Match IMG_0387.png) */}
+              {/* Close Button on Confirmation Screen */}
+              <button
+                onClick={handleClose}
+                type="button"
+                className="w-full py-2 text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:hover:text-white transition-colors cursor-pointer"
+              >
+                {lang === 'de' ? 'Schließen' : 'Close'}
+              </button>
+
+              {/* Disclaimer Text */}
               <p className="text-[11px] leading-relaxed text-[#8D9094] dark:text-zinc-400 text-center px-1">
                 {getTranslation(lang, 'sendRobuxDisclaimer')}
               </p>
@@ -492,4 +752,3 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     </div>
   );
 };
-
