@@ -6,6 +6,7 @@ import { OtherViews } from './components/OtherViews';
 import { SendRobuxModal } from './components/SendRobuxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { KeySystemModal } from './components/KeySystemModal';
 import { UserSettings, RobloxFriend } from './types';
 import { INITIAL_FRIENDS } from './data/friends';
 
@@ -30,6 +31,15 @@ export default function App() {
   // Navigation & UI Layout state
   const [activeTab, setActiveTab] = useState<string>('robux');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+
+  // Key System Lock/Unlock state
+  const [isKeyUnlocked, setIsKeyUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('site_key_unlocked') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // User Settings state with localStorage persistence
   const [userSettings, setUserSettings] = useState<UserSettings>(() => {
@@ -214,9 +224,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#111214] text-zinc-900 dark:text-zinc-100 font-sans antialiased flex flex-col selection:bg-zinc-800 selection:text-white transition-colors">
+      {/* 12-Character Key System Gateway Modal */}
+      <KeySystemModal
+        isUnlocked={isKeyUnlocked}
+        onUnlock={() => {
+          setIsKeyUnlocked(true);
+          try {
+            sessionStorage.setItem('site_key_unlocked', 'true');
+          } catch {
+            // ignore
+          }
+          showToast('Website erfolgreich freigeschaltet!');
+        }}
+      />
+
       {/* Enter Username Initial Onboarding Modal */}
       <OnboardingModal
-        isOpen={!userSettings.hasCompletedOnboarding}
+        isOpen={!userSettings.hasCompletedOnboarding && isKeyUnlocked}
         onLogin={handleLogin}
         onContinueAsGuest={handleContinueAsGuest}
       />

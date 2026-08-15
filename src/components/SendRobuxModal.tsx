@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Calendar, Users, Info, Sparkles, ArrowRight, RefreshCw } from 'lucide-react';
+import { X, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Calendar, Users, Info, Sparkles, ShieldCheck, ArrowRight, Zap, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { RobloxFriend, UserSettings } from '../types';
 import { RobuxIcon, RobloxPlusBadge, VerifiedBadge } from './RobloxIcons';
 import { RobloxAvatar } from './RobloxAvatar';
 import { searchRobloxUsers, RobloxUserSearchResult } from '../services/robloxApi';
 import { getTranslation } from '../utils/translations';
+import { playCoinWhooshSound, playSendSuccessSound } from '../utils/audio';
 
 interface SendRobuxModalProps {
   isOpen: boolean;
@@ -131,13 +132,36 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
 
   const triggerConfetti = () => {
     try {
+      // Primary celebratory burst
       confetti({
-        particleCount: 70,
-        spread: 65,
+        particleCount: 80,
+        spread: 70,
         origin: { y: 0.6 },
-        colors: ['#00A2FF', '#10B981', '#F59E0B', '#6366F1', '#FFFFFF'],
-        ticks: 180,
+        colors: ['#00A2FF', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#FFFFFF'],
+        ticks: 200,
+        gravity: 1.1,
+        scalar: 1.2,
       });
+
+      // Secondary glitter burst
+      setTimeout(() => {
+        confetti({
+          particleCount: 50,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0.2, y: 0.65 },
+          colors: ['#F59E0B', '#10B981', '#00A2FF'],
+          ticks: 180,
+        });
+        confetti({
+          particleCount: 50,
+          angle: 120,
+          spread: 60,
+          origin: { x: 0.8, y: 0.65 },
+          colors: ['#F59E0B', '#10B981', '#00A2FF'],
+          ticks: 180,
+        });
+      }, 250);
     } catch {
       // Confetti fallback
     }
@@ -159,14 +183,17 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
       return;
     }
 
-    // Begin animated sending phase (NO SOUND, ONLY 1 ROTATION OF CIRCLE WITH CHECKMARK)
+    // Begin animated sending phase
     setStep('sending');
     setTransferProgress(0);
     setAnimatedRobuxCount(0);
     setErrorMessage(null);
 
+    // Trigger subtle initial whoosh sound
+    playCoinWhooshSound();
+
     const startTime = Date.now();
-    const duration = 1200; // 1.2s single clean rotation
+    const duration = 1350; // Single smooth 1.35s spin & checkmark draw
 
     const animate = () => {
       const now = Date.now();
@@ -189,6 +216,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
             avatarUrl: selectedFriend?.avatarUrl,
             transactionId: randomId,
           });
+          playSendSuccessSound();
           triggerConfetti();
         } else {
           setErrorMessage(lang === 'de'
@@ -223,6 +251,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   };
 
   const handleClose = () => {
+    if (step === 'sending') return; // Do not dismiss mid-transfer
     resetView();
     setSearchQuery('');
     setSendAmount('0');
@@ -265,26 +294,33 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
               <span>{userSettings.robuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
             </div>
 
-            {/* Always visible Close / X Button */}
-            <button
-              onClick={handleClose}
-              className="p-1.5 text-[#656668] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
-              title={lang === 'de' ? 'Schließen' : 'Close'}
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {step !== 'sending' && (
+              <button
+                onClick={handleClose}
+                className="p-1.5 text-[#656668] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Modal Body */}
         <div className="px-6 pb-6 pt-4">
           {/* ========================================================================= */}
-          {/* STAGE: CIRCLE WITH CHECKMARK (1 ROTATION ONLY, NO SOUND)                  */}
+          {/* STAGE: VERIFICATION CIRCLE WITH CHECKMARK (1 ROTATION)                   */}
           {/* ========================================================================= */}
           {step === 'sending' ? (
             <div className="py-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
               {/* Central Verified Circle with 1 Rotation + Checkmark Draw */}
               <div className="relative mx-auto w-28 h-28 flex items-center justify-center">
+                {/* Background glow when finished */}
+                <div 
+                  className={`absolute inset-0 rounded-full transition-all duration-500 ${
+                    transferProgress > 70 ? 'bg-emerald-500/20 scale-110 blur-md' : 'bg-transparent'
+                  }`} 
+                />
+
                 {/* The Rotating Circle SVG that completes 1 turn & draws the checkmark */}
                 <svg 
                   className="w-24 h-24 transform -rotate-90 animate-spin-once" 
@@ -329,34 +365,33 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </div>
               </div>
 
-              {/* Status Text: Just simple Send / Senden (no verified text) */}
+              {/* Status Text and Summary */}
               <div className="space-y-1.5 animate-in fade-in duration-300">
                 <h3 className="text-xl font-black text-[#191919] dark:text-white tracking-tight">
-                  {lang === 'de' ? 'Robux senden' : 'Send Robux'}
+                  {transferProgress > 75 
+                    ? (lang === 'de' ? 'Verifiziert & Gesendet!' : 'Verified & Sent!')
+                    : (lang === 'de' ? 'Robux werden übertragen...' : 'Transferring Robux...')}
                 </h3>
                 <div className="flex items-center justify-center space-x-1.5 text-sm font-bold text-[#656668] dark:text-zinc-400">
                   <RobuxIcon className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span className="text-[#191919] dark:text-white font-extrabold">{parsedAmount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
+                  <span className="text-[#191919] dark:text-white font-extrabold">{parsedAmount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')} R$</span>
                   <span>{lang === 'de' ? 'an' : 'to'}</span>
                   <span className="text-[#191919] dark:text-white font-extrabold">@{recipientName}</span>
                 </div>
               </div>
 
-              {/* Close Button during sending if user wants to dismiss */}
-              <button
-                onClick={handleClose}
-                type="button"
-                className="w-full py-2 text-xs font-bold text-[#8D9094] hover:text-[#191919] dark:hover:text-white transition-colors cursor-pointer"
-              >
-                {lang === 'de' ? 'Schließen' : 'Close'}
-              </button>
+              {/* Verification Subtitle */}
+              <div className="flex items-center justify-center space-x-1.5 text-xs text-[#8D9094] dark:text-zinc-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>{lang === 'de' ? 'Roblox Instant Verification' : 'Roblox Instant Verification'}</span>
+              </div>
             </div>
           ) : sendSuccessData ? (
             /* ========================================================================= */
             /* STAGE: GRAND SUCCESS CELEBRATION CARD                                    */
             /* ========================================================================= */
-            <div className="py-3 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
-              {/* Success Check Badge */}
+            <div className="py-4 space-y-5 text-center animate-in fade-in zoom-in-95 duration-200">
+              {/* Grand Glowing Success Check Badge */}
               <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
                 <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping opacity-75" />
                 <div className="relative w-16 h-16 bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
@@ -411,7 +446,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 </div>
               </div>
 
-              {/* Action Buttons with explicit Schließen / Close Button */}
+              {/* Action Buttons */}
               <div className="pt-2 flex items-center space-x-3">
                 <button
                   onClick={resetView}
@@ -424,7 +459,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   onClick={handleClose}
                   className="flex-1 bg-[#191919] dark:bg-white hover:bg-black dark:hover:bg-zinc-100 text-white dark:text-[#191919] font-bold py-3 rounded-xl text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  <span>{lang === 'de' ? 'Schließen' : 'Close'}</span>
+                  <span>{lang === 'de' ? 'Fertig' : 'Done'}</span>
                 </button>
               </div>
             </div>
@@ -544,15 +579,6 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Close Button on Step 1 */}
-              <button
-                onClick={handleClose}
-                type="button"
-                className="w-full py-2.5 text-xs font-bold text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white bg-[#F2F4F5] dark:bg-zinc-800 hover:bg-[#E8EBEE] dark:hover:bg-zinc-700 rounded-xl transition-colors cursor-pointer"
-              >
-                {lang === 'de' ? 'Schließen' : 'Close'}
-              </button>
             </div>
           ) : step === 'enter_amount' ? (
             /* ========================================================================= */
@@ -643,18 +669,9 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                 >
                   {getTranslation(lang, 'next')}
                 </button>
-                <div className="space-y-1 text-center">
-                  <button
-                    onClick={handleClose}
-                    type="button"
-                    className="text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:hover:text-white hover:underline cursor-pointer"
-                  >
-                    {lang === 'de' ? 'Schließen' : 'Close'}
-                  </button>
-                  <p className="text-xs text-[#656668] dark:text-zinc-400 font-normal tracking-tight">
-                    {getTranslation(lang, 'robloxAreSent')}
-                  </p>
-                </div>
+                <p className="text-xs text-[#656668] dark:text-zinc-400 font-normal tracking-tight">
+                  {getTranslation(lang, 'robloxAreSent')}
+                </p>
               </div>
             </div>
           ) : (
@@ -731,15 +748,6 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   {getTranslation(lang, 'edit')}
                 </button>
               </div>
-
-              {/* Close Button on Confirmation Screen */}
-              <button
-                onClick={handleClose}
-                type="button"
-                className="w-full py-2 text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:hover:text-white transition-colors cursor-pointer"
-              >
-                {lang === 'de' ? 'Schließen' : 'Close'}
-              </button>
 
               {/* Disclaimer Text */}
               <p className="text-[11px] leading-relaxed text-[#8D9094] dark:text-zinc-400 text-center px-1">
