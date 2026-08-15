@@ -251,7 +251,10 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   };
 
   const handleClose = () => {
-    if (step === 'sending') return; // Do not dismiss mid-transfer
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
     resetView();
     setSearchQuery('');
     setSendAmount('0');
@@ -294,14 +297,14 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
               <span>{userSettings.robuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
             </div>
 
-            {step !== 'sending' && (
-              <button
-                onClick={handleClose}
-                className="p-1.5 text-[#656668] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={handleClose}
+              className="p-1.5 text-[#656668] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 rounded-full transition-colors cursor-pointer"
+              title={lang === 'de' ? 'Schließen (X)' : 'Exit (X)'}
+              aria-label="Exit"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -384,6 +387,18 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
               <div className="flex items-center justify-center space-x-1.5 text-xs text-[#8D9094] dark:text-zinc-400">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span>{lang === 'de' ? 'Roblox Instant Verification' : 'Roblox Instant Verification'}</span>
+              </div>
+
+              {/* Exit / Abbrechen Button during sending */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white bg-[#F2F4F5] dark:bg-zinc-800 hover:bg-[#E3E5E8] dark:hover:bg-zinc-700 transition-colors inline-flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{lang === 'de' ? 'Abbrechen (X)' : 'Cancel (X)'}</span>
+                </button>
               </div>
             </div>
           ) : sendSuccessData ? (
