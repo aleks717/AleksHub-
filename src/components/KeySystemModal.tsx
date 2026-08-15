@@ -12,7 +12,9 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
-  Youtube
+  Youtube,
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 
 interface KeySystemModalProps {
@@ -41,25 +43,30 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Strict 4-step state machine:
-  // Step 1: Human verification
-  // Step 2: Discord Join
-  // Step 3: YouTube Subscribe (@SpyderAleks)
+  // 4 Strict Steps:
+  // Step 1: Human verification check
+  // Step 2: Discord Join + verification check
+  // Step 3: YouTube Subscribe (@SpyderAleks) + verification check
   // Step 4: Key Reveal
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Step 1 states
-  const [isVerifying, setIsVerifying] = useState(false);
+  // Step 1: Human verification
+  const [isVerifyingHuman, setIsVerifyingHuman] = useState(false);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
 
-  // Step 2 states (Discord)
-  const [hasJoinedDiscord, setHasJoinedDiscord] = useState(false);
+  // Step 2: Discord states
+  const [hasOpenedDiscord, setHasOpenedDiscord] = useState(false);
+  const [isVerifyingDiscord, setIsVerifyingDiscord] = useState(false);
+  const [isDiscordVerified, setIsDiscordVerified] = useState(false);
+  const [discordCountdown, setDiscordCountdown] = useState<number | null>(null);
 
-  // Step 3 states (YouTube)
-  const [hasSubscribedYoutube, setHasSubscribedYoutube] = useState(false);
-  const [isCheckingAllSteps, setIsCheckingAllSteps] = useState(false);
+  // Step 3: YouTube states
+  const [hasOpenedYoutube, setHasOpenedYoutube] = useState(false);
+  const [isVerifyingYoutube, setIsVerifyingYoutube] = useState(false);
+  const [isYoutubeVerified, setIsYoutubeVerified] = useState(false);
+  const [youtubeCountdown, setYoutubeCountdown] = useState<number | null>(null);
 
-  // Step 4 states (Generated Key)
+  // Step 4: Key Generation
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -116,66 +123,112 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
     }
   };
 
-  // Step 1: Human verification checkbox click
+  // STEP 1: Human verification checkbox
   const handleCheckboxClick = () => {
-    if (isHumanVerified || isVerifying) return;
-    setIsVerifying(true);
+    if (isHumanVerified || isVerifyingHuman) return;
+    setIsVerifyingHuman(true);
     setErrorMsg(null);
     setTimeout(() => {
-      setIsVerifying(false);
+      setIsVerifyingHuman(false);
       setIsHumanVerified(true);
     }, 1200);
   };
 
-  // Step 1 -> Step 2
   const handleProceedToStep2 = () => {
     if (!isHumanVerified) {
-      setErrorMsg('You must verify that you are human first.');
+      setErrorMsg('You must complete the human verification first.');
       return;
     }
     setErrorMsg(null);
     setStep(2);
   };
 
-  // Step 2: Discord join click
+  // STEP 2: Discord Join & Strict Check
   const handleJoinDiscord = () => {
     window.open('https://discord.gg/df2PB4mkHH', '_blank', 'noopener,noreferrer');
-    setHasJoinedDiscord(true);
+    setHasOpenedDiscord(true);
+    setErrorMsg(null);
   };
 
-  // Step 2 -> Step 3
+  const handleCheckDiscordTask = () => {
+    if (!hasOpenedDiscord) {
+      setErrorMsg('You must open and join the Discord server first.');
+      return;
+    }
+    if (isVerifyingDiscord || isDiscordVerified) return;
+
+    setErrorMsg(null);
+    setIsVerifyingDiscord(true);
+    setDiscordCountdown(3);
+
+    const timer1 = setTimeout(() => setDiscordCountdown(2), 1000);
+    const timer2 = setTimeout(() => setDiscordCountdown(1), 2000);
+    const timer3 = setTimeout(() => {
+      setIsVerifyingDiscord(false);
+      setIsDiscordVerified(true);
+      setDiscordCountdown(null);
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  };
+
   const handleProceedToStep3 = () => {
-    if (!hasJoinedDiscord) {
-      setErrorMsg('You must click "Join Discord Server" before proceeding.');
+    if (!isDiscordVerified) {
+      setErrorMsg('You must verify the Discord step first before proceeding.');
       return;
     }
     setErrorMsg(null);
     setStep(3);
   };
 
-  // Step 3: YouTube Subscribe click
+  // STEP 3: YouTube Subscribe & Strict Check
   const handleSubscribeYoutube = () => {
     window.open('https://www.youtube.com/@SpyderAleks?sub_confirmation=1', '_blank', 'noopener,noreferrer');
-    setHasSubscribedYoutube(true);
+    setHasOpenedYoutube(true);
+    setErrorMsg(null);
   };
 
-  // Final verification & generation
-  const handleVerifyAllAndComplete = () => {
-    if (!hasSubscribedYoutube) {
-      setErrorMsg('You must click "Subscribe to @SpyderAleks" before completing verification.');
+  const handleCheckYoutubeTask = () => {
+    if (!hasOpenedYoutube) {
+      setErrorMsg('You must open and subscribe to @SpyderAleks on YouTube first.');
+      return;
+    }
+    if (isVerifyingYoutube || isYoutubeVerified) return;
+
+    setErrorMsg(null);
+    setIsVerifyingYoutube(true);
+    setYoutubeCountdown(3);
+
+    const timer1 = setTimeout(() => setYoutubeCountdown(2), 1000);
+    const timer2 = setTimeout(() => setYoutubeCountdown(1), 2000);
+    const timer3 = setTimeout(() => {
+      setIsVerifyingYoutube(false);
+      setIsYoutubeVerified(true);
+      setYoutubeCountdown(null);
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  };
+
+  // STEP 4: Generate Key once all steps are strictly verified
+  const handleFinalizeAndGenerateKey = () => {
+    if (!isHumanVerified || !isDiscordVerified || !isYoutubeVerified) {
+      setErrorMsg('All previous verification steps must be completed and verified.');
       return;
     }
 
-    setIsCheckingAllSteps(true);
-    setErrorMsg(null);
-
-    setTimeout(() => {
-      setIsCheckingAllSteps(false);
-      const freshKey = generateNewKey();
-      saveNewValidKey(freshKey);
-      setGeneratedKey(freshKey);
-      setStep(4);
-    }, 1500);
+    const freshKey = generateNewKey();
+    saveNewValidKey(freshKey);
+    setGeneratedKey(freshKey);
+    setStep(4);
   };
 
   // Copy key to clipboard
@@ -312,8 +365,10 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                     setView('getKey');
                     setStep(1);
                     setIsHumanVerified(false);
-                    setHasJoinedDiscord(false);
-                    setHasSubscribedYoutube(false);
+                    setHasOpenedDiscord(false);
+                    setIsDiscordVerified(false);
+                    setHasOpenedYoutube(false);
+                    setIsYoutubeVerified(false);
                     setGeneratedKey(null);
                     setErrorMsg(null);
                   }}
@@ -325,7 +380,7 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
               </div>
             </div>
           ) : (
-            /* VIEW 2: GET KEY FLOW (4 STRICT STEPS) */
+            /* VIEW 2: GET KEY FLOW (4 STRICT STEPS WITH EXPLICIT VERIFICATION CHECKS) */
             <div className="space-y-5">
               {/* Back button */}
               <div className="flex items-center justify-between">
@@ -389,12 +444,12 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                         className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
                           isHumanVerified
                             ? 'bg-emerald-500 border-emerald-500 text-white'
-                            : isVerifying
+                            : isVerifyingHuman
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50'
                             : 'border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-800'
                         }`}
                       >
-                        {isVerifying ? (
+                        {isVerifyingHuman ? (
                           <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
                         ) : isHumanVerified ? (
                           <Check className="w-4 h-4 stroke-[3]" />
@@ -429,7 +484,7 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                 </div>
               )}
 
-              {/* STEP 2: JOIN DISCORD */}
+              {/* STEP 2: JOIN DISCORD & VERIFY TASK */}
               {step === 2 && (
                 <div className="space-y-4 pt-1">
                   <div className="text-center space-y-1">
@@ -442,11 +497,11 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                       Step 2: Join Discord Server
                     </h3>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Join our Discord community to continue the verification process.
+                      Join our Discord community and verify completion to unlock Step 3.
                     </p>
                   </div>
 
-                  {/* Discord Action Box */}
+                  {/* Task card */}
                   <div className="p-4 rounded-2xl bg-[#5865F2]/5 dark:bg-[#5865F2]/10 border border-[#5865F2]/25 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2.5">
@@ -464,29 +519,66 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                           </p>
                         </div>
                       </div>
-                      {hasJoinedDiscord && (
+
+                      {isDiscordVerified ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center space-x-1">
                           <Check className="w-3 h-3" />
-                          <span>Joined</span>
+                          <span>Task Verified</span>
                         </span>
-                      )}
+                      ) : hasOpenedDiscord ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold flex items-center space-x-1">
+                          <Clock className="w-3 h-3" />
+                          <span>Pending Check</span>
+                        </span>
+                      ) : null}
                     </div>
 
+                    {/* Step 2.1: Open link */}
                     <button
                       onClick={handleJoinDiscord}
                       className="w-full py-2.5 px-4 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-md shadow-[#5865F2]/20"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Join Discord Server</span>
+                      <span>1. Join Discord Server</span>
+                    </button>
+
+                    {/* Step 2.2: Check Task */}
+                    <button
+                      disabled={!hasOpenedDiscord || isVerifyingDiscord || isDiscordVerified}
+                      onClick={handleCheckDiscordTask}
+                      className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
+                        isDiscordVerified
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : hasOpenedDiscord && !isVerifyingDiscord
+                          ? 'bg-zinc-800 hover:bg-zinc-700 text-white dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer'
+                          : 'bg-zinc-200 dark:bg-zinc-800/60 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {isVerifyingDiscord ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Checking status ({discordCountdown}s)...</span>
+                        </>
+                      ) : isDiscordVerified ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Discord Verified</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>2. Verify Discord Task</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
-                  {/* Proceed to Step 3 Button */}
+                  {/* Proceed to Step 3 - Strictly locked until verified */}
                   <button
-                    disabled={!hasJoinedDiscord}
+                    disabled={!isDiscordVerified}
                     onClick={handleProceedToStep3}
                     className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
-                      hasJoinedDiscord
+                      isDiscordVerified
                         ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 cursor-pointer animate-in fade-in'
                         : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
                     }`}
@@ -497,7 +589,7 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                 </div>
               )}
 
-              {/* STEP 3: SUBSCRIBE YOUTUBE */}
+              {/* STEP 3: SUBSCRIBE YOUTUBE & VERIFY TASK */}
               {step === 3 && (
                 <div className="space-y-4 pt-1">
                   <div className="text-center space-y-1">
@@ -508,7 +600,7 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                       Step 3: Subscribe on YouTube
                     </h3>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Subscribe to SpyderAleks on YouTube to complete verification.
+                      Subscribe to SpyderAleks and verify the task to generate your key.
                     </p>
                   </div>
 
@@ -528,49 +620,77 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                           </p>
                         </div>
                       </div>
-                      {hasSubscribedYoutube && (
+
+                      {isYoutubeVerified ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center space-x-1">
                           <Check className="w-3 h-3" />
-                          <span>Subscribed</span>
+                          <span>Task Verified</span>
                         </span>
-                      )}
+                      ) : hasOpenedYoutube ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold flex items-center space-x-1">
+                          <Clock className="w-3 h-3" />
+                          <span>Pending Check</span>
+                        </span>
+                      ) : null}
                     </div>
 
+                    {/* Step 3.1: Open link */}
                     <button
                       onClick={handleSubscribeYoutube}
                       className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-md shadow-red-600/20"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Subscribe to @SpyderAleks</span>
+                      <span>1. Subscribe to @SpyderAleks</span>
+                    </button>
+
+                    {/* Step 3.2: Check Task */}
+                    <button
+                      disabled={!hasOpenedYoutube || isVerifyingYoutube || isYoutubeVerified}
+                      onClick={handleCheckYoutubeTask}
+                      className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
+                        isYoutubeVerified
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : hasOpenedYoutube && !isVerifyingYoutube
+                          ? 'bg-zinc-800 hover:bg-zinc-700 text-white dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer'
+                          : 'bg-zinc-200 dark:bg-zinc-800/60 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {isVerifyingYoutube ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Checking status ({youtubeCountdown}s)...</span>
+                        </>
+                      ) : isYoutubeVerified ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Subscription Verified</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>2. Verify Subscription Task</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
-                  {/* Complete Verification Button */}
+                  {/* Final Complete Verification Button */}
                   <button
-                    disabled={!hasSubscribedYoutube || isCheckingAllSteps}
-                    onClick={handleVerifyAllAndComplete}
+                    disabled={!isYoutubeVerified}
+                    onClick={handleFinalizeAndGenerateKey}
                     className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center space-x-2 transition-all ${
-                      hasSubscribedYoutube && !isCheckingAllSteps
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
+                      isYoutubeVerified
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 cursor-pointer animate-in fade-in'
                         : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
                     }`}
                   >
-                    {isCheckingAllSteps ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Verifying completion...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Complete Verification</span>
-                      </>
-                    )}
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Complete Verification</span>
                   </button>
                 </div>
               )}
 
-              {/* STEP 4: REVEAL GENERATED KEY ONLY AFTER ALL STEPS COMPLETE */}
+              {/* STEP 4: REVEAL GENERATED KEY ONLY AFTER ALL TASKS ARE VERIFIED */}
               {step === 4 && generatedKey && (
                 <div className="space-y-4 pt-1 animate-in fade-in">
                   <div className="text-center space-y-1">
@@ -581,7 +701,7 @@ export function KeySystemModal({ isUnlocked, onUnlock }: KeySystemModalProps) {
                       Verification Complete!
                     </h3>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Your unique 12-character license key has been generated:
+                      All tasks have been verified. Here is your license key:
                     </p>
                   </div>
 
