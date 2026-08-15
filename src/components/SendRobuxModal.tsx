@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Calendar, Users, Info, Sparkles, ShieldCheck, ArrowRight, Zap, RefreshCw } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { RobloxFriend, UserSettings } from '../types';
 import { RobuxIcon, RobloxPlusBadge, VerifiedBadge } from './RobloxIcons';
 import { RobloxAvatar } from './RobloxAvatar';
 import { searchRobloxUsers, RobloxUserSearchResult } from '../services/robloxApi';
 import { getTranslation } from '../utils/translations';
-import { playCoinWhooshSound, playSendSuccessSound } from '../utils/audio';
 
 interface SendRobuxModalProps {
   isOpen: boolean;
@@ -130,43 +128,6 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     setStep('confirm_send');
   };
 
-  const triggerConfetti = () => {
-    try {
-      // Primary celebratory burst
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#00A2FF', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#FFFFFF'],
-        ticks: 200,
-        gravity: 1.1,
-        scalar: 1.2,
-      });
-
-      // Secondary glitter burst
-      setTimeout(() => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 60,
-          origin: { x: 0.2, y: 0.65 },
-          colors: ['#F59E0B', '#10B981', '#00A2FF'],
-          ticks: 180,
-        });
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 60,
-          origin: { x: 0.8, y: 0.65 },
-          colors: ['#F59E0B', '#10B981', '#00A2FF'],
-          ticks: 180,
-        });
-      }, 250);
-    } catch {
-      // Confetti fallback
-    }
-  };
-
   const handleExecuteSend = () => {
     const amount = parseInt(sendAmount, 10);
     const recipient = selectedFriend ? selectedFriend.username : searchQuery.trim();
@@ -188,9 +149,6 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     setTransferProgress(0);
     setAnimatedRobuxCount(0);
     setErrorMessage(null);
-
-    // Trigger subtle initial whoosh sound
-    playCoinWhooshSound();
 
     const startTime = Date.now();
     const duration = 1350; // Single smooth 1.35s spin & checkmark draw
@@ -216,8 +174,6 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
             avatarUrl: selectedFriend?.avatarUrl,
             transactionId: randomId,
           });
-          playSendSuccessSound();
-          triggerConfetti();
         } else {
           setErrorMessage(lang === 'de'
             ? `Nicht genug Robux! Dein aktuelles Guthaben beträgt ${userSettings.robuxCount.toLocaleString('de-DE')} Robux.`
