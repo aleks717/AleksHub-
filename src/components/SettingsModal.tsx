@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, ShieldCheck, User, Plus, Trash2, RotateCcw, Sun, Moon, Info, AlertTriangle, Loader2, Search, Globe } from 'lucide-react';
+import { X, Check, ShieldCheck, User, Plus, Trash2, RotateCcw, Sun, Moon, Info, AlertTriangle, Loader2, Search, Globe, Activity } from 'lucide-react';
 import { UserSettings, RobloxFriend } from '../types';
 import { RobuxIcon, VerifiedBadge, RobloxPlusBadge } from './RobloxIcons';
 import { RobloxAvatar } from './RobloxAvatar';
 import { fetchRobloxUserInfo } from '../services/robloxApi';
 import { LANGUAGES } from '../utils/translations';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -42,7 +43,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Add friend state
   const [newFriendUsername, setNewFriendUsername] = useState('');
-  const [activeTab, setActiveTab] = useState<'profile' | 'friends' | 'disclaimer'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'friends' | 'analytics' | 'disclaimer'>('profile');
 
   // Sync state whenever modal opens or userSettings prop changes
   useEffect(() => {
@@ -183,28 +184,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 text-[#191919]">
       <div 
-        className="bg-white dark:bg-[#191919] text-[#191919] dark:text-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-[#E3E5E8] dark:border-zinc-800"
+        className={`bg-white dark:bg-[#191919] text-[#191919] dark:text-white rounded-2xl w-full ${
+          activeTab === 'analytics' ? 'max-w-3xl' : 'max-w-lg'
+        } shadow-2xl overflow-hidden border border-[#E3E5E8] dark:border-zinc-800 transition-all duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-[#E3E5E8] dark:border-zinc-800 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <h2 className="text-lg font-bold">Roblox Settings</h2>
+            <h2 className="text-lg font-bold">Roblox Settings & Dashboard</h2>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1 text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white rounded-full hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 transition-colors"
+            className="p-1 text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white rounded-full hover:bg-[#F2F4F5] dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Selection Header */}
-        <div className="flex border-b border-[#E3E5E8] dark:border-zinc-800 bg-[#F2F4F5] dark:bg-zinc-900">
+        <div className="flex border-b border-[#E3E5E8] dark:border-zinc-800 bg-[#F2F4F5] dark:bg-zinc-900 overflow-x-auto">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-all ${
+            className={`flex-1 min-w-[100px] py-2.5 px-3 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'profile'
                 ? 'border-[#00A2FF] text-[#00A2FF] bg-white dark:bg-[#191919]'
                 : 'border-transparent text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white'
@@ -213,8 +216,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             Profile & Theme
           </button>
           <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold text-center border-b-2 transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+              activeTab === 'analytics'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-[#191919]'
+                : 'border-transparent text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Live Dashboard</span>
+          </button>
+          <button
             onClick={() => setActiveTab('friends')}
-            className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-all ${
+            className={`flex-1 min-w-[90px] py-2.5 px-3 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'friends'
                 ? 'border-[#00A2FF] text-[#00A2FF] bg-white dark:bg-[#191919]'
                 : 'border-transparent text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white'
@@ -224,7 +238,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('disclaimer')}
-            className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-all ${
+            className={`flex-1 min-w-[80px] py-2.5 px-3 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'disclaimer'
                 ? 'border-[#00A2FF] text-[#00A2FF] bg-white dark:bg-[#191919]'
                 : 'border-transparent text-[#656668] dark:text-zinc-400 hover:text-[#191919] dark:hover:text-white'
@@ -543,6 +557,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
             </>
+          )}
+
+          {activeTab === 'analytics' && (
+            /* Live Analytics & Visitors Dashboard Tab */
+            <AnalyticsDashboard lang={language} />
           )}
 
           {activeTab === 'friends' && (
