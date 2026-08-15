@@ -50,6 +50,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
   const [transferProgress, setTransferProgress] = useState(0);
   const [animatedRobuxCount, setAnimatedRobuxCount] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
+  const completionTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -75,6 +76,9 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);
@@ -151,35 +155,43 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     setErrorMessage(null);
 
     const startTime = Date.now();
-    const duration = 1350; // Single smooth 1.35s spin & checkmark draw
+    const duration = 1200; // 1.2s smooth circle fill
 
     const animate = () => {
       const now = Date.now();
       const elapsed = now - startTime;
       const progress = Math.min(1, elapsed / duration);
 
-      setTransferProgress(Math.round(progress * 100));
-      setAnimatedRobuxCount(Math.round(progress * amount));
+      // Ease out cubic
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      setTransferProgress(Math.round(easedProgress * 100));
+      setAnimatedRobuxCount(Math.round(easedProgress * amount));
 
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        // Animation finished!
-        const success = onSendRobux(recipient, amount);
-        if (success) {
-          const randomId = 'RBX-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
-          setSendSuccessData({
-            recipient,
-            amount,
-            avatarUrl: selectedFriend?.avatarUrl,
-            transactionId: randomId,
-          });
-        } else {
-          setErrorMessage(lang === 'de'
-            ? `Nicht genug Robux! Dein aktuelles Guthaben beträgt ${userSettings.robuxCount.toLocaleString('de-DE')} Robux.`
-            : `Insufficient Robux! Your current balance is ${userSettings.robuxCount.toLocaleString('en-US')} Robux.`);
-          setStep('confirm_send');
-        }
+        setTransferProgress(100);
+        setAnimatedRobuxCount(amount);
+
+        // Pause for 650ms so the user sees the verified green checkmark and "Verifiziert & Gesendet!"
+        completionTimeoutRef.current = window.setTimeout(() => {
+          const success = onSendRobux(recipient, amount);
+          if (success) {
+            const randomId = 'RBX-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+            setSendSuccessData({
+              recipient,
+              amount,
+              avatarUrl: selectedFriend?.avatarUrl,
+              transactionId: randomId,
+            });
+          } else {
+            setErrorMessage(lang === 'de'
+              ? `Nicht genug Robux! Dein aktuelles Guthaben beträgt ${userSettings.robuxCount.toLocaleString('de-DE')} Robux.`
+              : `Insufficient Robux! Your current balance is ${userSettings.robuxCount.toLocaleString('en-US')} Robux.`);
+            setStep('confirm_send');
+          }
+        }, 650);
       }
     };
 
@@ -204,12 +216,20 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
     setErrorMessage(null);
     setTransferProgress(0);
     setAnimatedRobuxCount(0);
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
   };
 
   const handleClose = () => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
     }
     resetView();
     setSearchQuery('');
@@ -219,6 +239,12 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
 
   const parsedAmount = parseInt(sendAmount, 10) || 0;
   const recipientName = selectedFriend?.username || searchQuery.trim();
+
+  // Circle geometry for verified circle (radius = 40, circumference = 251.33)
+  const circleRadius = 40;
+  const circumference = 2 * Math.PI * circleRadius;
+  const strokeOffset = circumference - (circumference * transferProgress) / 100;
+  const isVerifiedPhase = transferProgress >= 95;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200 text-[#191919] dark:text-white">
@@ -247,7 +273,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
           </div>
 
           <div className="flex items-center space-x-3">
-            {/* User Balance display in top right: ⬡ 1,594 */}
+            {/* User Balance display in top right */}
             <div className="flex items-center space-x-1.5 bg-[#F2F4F5] dark:bg-zinc-800/80 px-2.5 py-1 rounded-full text-xs font-bold text-[#191919] dark:text-white">
               <RobuxIcon className="w-3.5 h-3.5 text-[#191919] dark:text-white shrink-0" />
               <span>{userSettings.robuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')}</span>
@@ -267,29 +293,29 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
         {/* Modal Body */}
         <div className="px-6 pb-6 pt-4">
           {/* ========================================================================= */}
-          {/* STAGE: VERIFICATION CIRCLE WITH CHECKMARK (1 ROTATION)                   */}
+          {/* STAGE: VERIFICATION CIRCLE WITH CHECKMARK                                */}
           {/* ========================================================================= */}
           {step === 'sending' ? (
             <div className="py-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
-              {/* Central Verified Circle with 1 Rotation + Checkmark Draw */}
+              {/* Central Verified Circle with Smooth Drawing + Checkmark Pop */}
               <div className="relative mx-auto w-28 h-28 flex items-center justify-center">
                 {/* Background glow when finished */}
                 <div 
                   className={`absolute inset-0 rounded-full transition-all duration-500 ${
-                    transferProgress > 70 ? 'bg-emerald-500/20 scale-110 blur-md' : 'bg-transparent'
+                    isVerifiedPhase ? 'bg-emerald-500/20 scale-110 blur-md' : 'bg-transparent'
                   }`} 
                 />
 
-                {/* The Rotating Circle SVG that completes 1 turn & draws the checkmark */}
+                {/* The Rotating Progress Circle SVG */}
                 <svg 
-                  className="w-24 h-24 transform -rotate-90 animate-spin-once" 
+                  className="w-24 h-24 -rotate-90 transform" 
                   viewBox="0 0 100 100"
                 >
                   {/* Track Background */}
                   <circle
                     cx="50"
                     cy="50"
-                    r="44"
+                    r={circleRadius}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="5"
@@ -299,41 +325,53 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   <circle
                     cx="50"
                     cy="50"
-                    r="44"
+                    r={circleRadius}
                     fill="none"
-                    stroke={transferProgress > 70 ? '#10B981' : '#00A2FF'}
-                    strokeWidth="6"
+                    stroke={isVerifiedPhase ? '#10B981' : '#00A2FF'}
+                    strokeWidth="5.5"
                     strokeLinecap="round"
-                    className="animate-draw-circle transition-colors duration-300"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeOffset}
+                    style={{
+                      transition: 'stroke-dashoffset 80ms ease-out, stroke 300ms ease',
+                    }}
                   />
                 </svg>
 
-                {/* The Checkmark (Häkchen) that pops and draws inside after rotation */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <svg 
-                    className="w-12 h-12 text-emerald-500 animate-draw-check" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="3.5" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </div>
+                {/* The Checkmark (Häkchen) that smoothly pops & draws */}
+                {isVerifiedPhase ? (
+                  <div className="absolute inset-0 flex items-center justify-center animate-check-pop">
+                    <svg 
+                      className="w-12 h-12 text-emerald-500 animate-check-stroke" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="3.5" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-mono font-black text-[#191919] dark:text-white">
+                      {transferProgress}%
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Status Text and Summary */}
-              <div className="space-y-1.5 animate-in fade-in duration-300">
-                <h3 className="text-xl font-black text-[#191919] dark:text-white tracking-tight">
-                  {transferProgress > 75 
+              <div className="space-y-1.5">
+                <h3 className="text-xl font-black text-[#191919] dark:text-white tracking-tight transition-all">
+                  {isVerifiedPhase 
                     ? (lang === 'de' ? 'Verifiziert & Gesendet!' : 'Verified & Sent!')
                     : (lang === 'de' ? 'Robux werden übertragen...' : 'Transferring Robux...')}
                 </h3>
                 <div className="flex items-center justify-center space-x-1.5 text-sm font-bold text-[#656668] dark:text-zinc-400">
                   <RobuxIcon className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span className="text-[#191919] dark:text-white font-extrabold">{parsedAmount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')} R$</span>
+                  <span className="text-[#191919] dark:text-white font-extrabold">{animatedRobuxCount.toLocaleString(lang === 'de' ? 'de-DE' : 'en-US')} R$</span>
                   <span>{lang === 'de' ? 'an' : 'to'}</span>
                   <span className="text-[#191919] dark:text-white font-extrabold">@{recipientName}</span>
                 </div>
@@ -341,11 +379,11 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
 
               {/* Verification Subtitle */}
               <div className="flex items-center justify-center space-x-1.5 text-xs text-[#8D9094] dark:text-zinc-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <ShieldCheck className={`w-3.5 h-3.5 transition-colors ${isVerifiedPhase ? 'text-emerald-500' : 'text-blue-500'}`} />
                 <span>{lang === 'de' ? 'Roblox Instant Verification' : 'Roblox Instant Verification'}</span>
               </div>
 
-              {/* Exit / Abbrechen Button during sending */}
+              {/* Exit / Close Button during sending */}
               <div className="pt-2">
                 <button
                   type="button"
@@ -353,7 +391,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   className="px-4 py-2 rounded-xl text-xs font-semibold text-[#8D9094] hover:text-[#191919] dark:text-zinc-400 dark:hover:text-white bg-[#F2F4F5] dark:bg-zinc-800 hover:bg-[#E3E5E8] dark:hover:bg-zinc-700 transition-colors inline-flex items-center space-x-1.5 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
-                  <span>Cancel</span>
+                  <span>Close</span>
                 </button>
               </div>
             </div>

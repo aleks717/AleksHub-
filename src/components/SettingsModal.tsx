@@ -677,9 +677,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex space-x-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-[#E3E5E8] dark:bg-zinc-800 hover:bg-[#BDC1C6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white font-bold rounded-xl text-xs transition-colors"
+              className="px-4 py-2 bg-[#E3E5E8] dark:bg-zinc-800 hover:bg-[#BDC1C6] dark:hover:bg-zinc-700 text-[#191919] dark:text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
             >
-              Cancel
+              Close
             </button>
             <button
               onClick={handleSave}

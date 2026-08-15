@@ -11,7 +11,7 @@ import { UserSettings, RobloxFriend } from './types';
 import { INITIAL_FRIENDS } from './data/friends';
 
 import { fetchRobloxUserInfo } from './services/robloxApi';
-import { recordNewPageVisit } from './utils/analytics';
+import { sendAnalyticsHeartbeat } from './utils/analytics';
 
 const DEFAULT_USER_SETTINGS: UserSettings = {
   username: 'Guest',
@@ -73,13 +73,21 @@ export default function App() {
 
   // Apply dark/light class to root element for Tailwind dark mode
   useEffect(() => {
-    recordNewPageVisit();
     if (userSettings.theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
   }, [userSettings.theme]);
+
+  // Real backend analytics heartbeat tracking
+  useEffect(() => {
+    sendAnalyticsHeartbeat(userSettings.username);
+    const interval = setInterval(() => {
+      sendAnalyticsHeartbeat(userSettings.username);
+    }, 40000);
+    return () => clearInterval(interval);
+  }, [userSettings.username]);
 
   // Save settings to localStorage
   useEffect(() => {
