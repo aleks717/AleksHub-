@@ -430,7 +430,7 @@ export const SendRobuxModal: React.FC<SendRobuxModalProps> = ({
                   onClick={handleClose}
                   className="flex-1 bg-[#191919] dark:bg-white hover:bg-black dark:hover:bg-zinc-100 text-white dark:text-[#191919] font-bold py-3 rounded-xl text-xs transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  <span>Cancel</span>
+                  <span>Close</span>
                 </button>
               </div>
             </div>
